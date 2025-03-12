@@ -30,30 +30,45 @@ const Register = () => {
     }
     
     try {
-      console.log('Attempting to sign up with:', email); // Debug log
+      console.log('Attempting registration with:', email);
       const { error, data } = await signUp(email, password);
       
       if (error) {
-        console.error('Registration error:', error); // Debug log
+        console.error('Registration error:', error);
+        const errorMessage = error.message === 'Failed to fetch' 
+          ? 'Connection error. Please check your internet connection and try again.'
+          : error.message || 'Failed to create account. Please try again.';
+          
         toast({
           title: 'Registration failed',
-          description: error.message || 'Failed to create account. Please try again.',
+          description: errorMessage,
           variant: 'destructive',
         });
-        setLoading(false);
         return;
       }
       
-      toast({
-        title: 'Registration successful',
-        description: 'Please check your email to confirm your account.',
-      });
-      navigate('/login');
+      if (data?.user) {
+        toast({
+          title: 'Registration successful',
+          description: 'Please check your email to confirm your account.',
+        });
+        navigate('/login');
+      } else {
+        toast({
+          title: 'Registration error',
+          description: 'Failed to create account. Please try again.',
+          variant: 'destructive',
+        });
+      }
     } catch (error: any) {
-      console.error('Unexpected error during registration:', error); // Debug log
+      console.error('Unexpected error during registration:', error);
+      const errorMessage = error.message?.includes('fetch')
+        ? 'Network error. Please check your connection and try again.'
+        : 'An unexpected error occurred. Please try again.';
+        
       toast({
         title: 'Registration failed',
-        description: error.message || 'An unexpected error occurred. Please try again.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
