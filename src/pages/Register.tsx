@@ -19,15 +19,28 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     
+    if (password.length < 6) {
+      toast({
+        title: 'Password too short',
+        description: 'Password must be at least 6 characters long',
+        variant: 'destructive',
+      });
+      setLoading(false);
+      return;
+    }
+    
     try {
-      const { error } = await signUp(email, password);
+      console.log('Attempting to sign up with:', email); // Debug log
+      const { error, data } = await signUp(email, password);
       
       if (error) {
+        console.error('Registration error:', error); // Debug log
         toast({
           title: 'Registration failed',
-          description: error.message,
+          description: error.message || 'Failed to create account. Please try again.',
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
       
@@ -37,9 +50,10 @@ const Register = () => {
       });
       navigate('/login');
     } catch (error: any) {
+      console.error('Unexpected error during registration:', error); // Debug log
       toast({
         title: 'Registration failed',
-        description: error.message,
+        description: error.message || 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
     } finally {
