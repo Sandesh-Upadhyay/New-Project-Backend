@@ -20,26 +20,38 @@ const Login = () => {
     setLoading(true);
     
     try {
-      const { error } = await signIn(email, password);
+      console.log('Attempting to sign in with:', email); // Debug log
+      const { error, data } = await signIn(email, password);
       
       if (error) {
+        console.error('Login error:', error); // Debug log
         toast({
           title: 'Login failed',
-          description: error.message,
+          description: error.message || 'Invalid email or password. Please try again.',
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
       
+      console.log('Login successful:', data); // Debug log
       toast({
         title: 'Login successful',
         description: 'Welcome back!',
       });
       navigate('/dashboard');
     } catch (error: any) {
+      console.error('Unexpected error during login:', error); // Debug log
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      // Check if it's a network error
+      if (error.message && error.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection or try again later.';
+      }
+      
       toast({
         title: 'Login failed',
-        description: error.message,
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

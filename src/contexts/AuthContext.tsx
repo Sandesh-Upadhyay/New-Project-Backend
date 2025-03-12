@@ -27,15 +27,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    const getInitialSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        } else {
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
+        }
+      } catch (error) {
+        console.error('Unexpected error getting session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
+        console.log('Auth state changed:', _event);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -46,23 +59,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const response = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    return response;
+    try {
+      const response = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      console.log('Sign up response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error during signUp:', error);
+      return { error, data: null };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const response = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return response;
+    try {
+      const response = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      console.log('Sign in response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error during signIn:', error);
+      return { error, data: null };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error during signOut:', error);
+    }
   };
 
   const value = {
