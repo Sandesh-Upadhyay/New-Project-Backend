@@ -1,12 +1,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, checkSupabaseConnection } from '@/lib/supabase';
 
 type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  connectionStatus: 'unknown' | 'connected' | 'disconnected';
   signIn: (email: string, password: string) => Promise<{
     error: any | null;
     data: any | null;
@@ -24,8 +25,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
 
   useEffect(() => {
+    // Check Supabase connection on load
+    const checkConnection = async () => {
+      const isConnected = await checkSupabaseConnection();
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+    };
+    
+    checkConnection();
+    
     // Get initial session
     const getInitialSession = async () => {
       try {
@@ -60,6 +70,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
+      if (connectionStatus === 'disconnected') {
+        return {
+          error: { message: 'No connection to authentication service.' },
+          data: null
+        };
+      }
+      
       const response = await supabase.auth.signUp({
         email,
         password,
@@ -68,12 +85,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return response;
     } catch (error) {
       console.error('Error during signUp:', error);
-      return { error, data: null };
+      return { 
+        error: { 
+          message: error instanceof Error ? error.message : 'Unknown error during sign up',
+          originalError: error
+        }, 
+        data: null 
+      };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (connectionStatus === 'disconnected') {
+        return {
+          error: { message: 'No connection to authentication service.' },
+          data: null
+        };
+      }
+      
       const response = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -82,7 +112,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return response;
     } catch (error) {
       console.error('Error during signIn:', error);
-      return { error, data: null };
+      return { 
+        error: { 
+          message: error instanceof Error ? error.message : 'Unknown error during sign in',
+          originalError: error
+        }, 
+        data: null 
+      };
     }
   };
 
@@ -98,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     user,
     loading,
+    connectionStatus,
     signIn,
     signUp,
     signOut,

@@ -1,22 +1,46 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
+  const { signUp, connectionStatus } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  useEffect(() => {
+    // Show connection status message if there are issues
+    if (connectionStatus === 'disconnected') {
+      toast({
+        title: 'Connection issue',
+        description: 'Currently unable to connect to authentication services. Please try again later.',
+        variant: 'destructive',
+      });
+    }
+  }, [connectionStatus, toast]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Don't attempt if we know there's no connection
+    if (connectionStatus === 'disconnected') {
+      toast({
+        title: 'Cannot register',
+        description: 'Unable to connect to authentication services. Please check your internet connection.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setLoading(true);
     
     if (password.length < 6) {
@@ -84,6 +108,16 @@ const Register = () => {
           <CardDescription>
             Create a new account to manage your items
           </CardDescription>
+          
+          {connectionStatus === 'disconnected' && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Connection Error</AlertTitle>
+              <AlertDescription>
+                Unable to connect to authentication services. Please check your internet connection.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -114,7 +148,11 @@ const Register = () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || connectionStatus === 'disconnected'}
+            >
               {loading ? 'Creating account...' : 'Create Account'}
             </Button>
             <div className="text-center text-sm">
