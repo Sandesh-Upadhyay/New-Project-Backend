@@ -21,7 +21,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true
   },
   global: {
-    fetch: (url, options) => {
+    fetch: async (url: RequestInfo | URL, options?: RequestInit) => {
       // Implement a retry mechanism for fetch
       const fetchWithRetry = async (attempt = 0): Promise<Response> => {
         try {
@@ -56,11 +56,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Add a health check method to verify connectivity
 export const checkSupabaseConnection = async () => {
   try {
-    // Use a simpler health check that doesn't depend on a specific table
-    const { data, error } = await supabase.from('health_check').select('count').limit(1);
+    // Use a simpler check that doesn't depend on any specific table
+    const { data, error } = await supabase.auth.getSession();
     
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase connection check failed:', error);
+    // Even if we don't have a session, we shouldn't get an error
+    // if we can connect to Supabase
+    if (error && error.message.includes('network')) {
+      console.error('Supabase connection check failed (network):', error);
       return false;
     }
     
@@ -68,6 +70,19 @@ export const checkSupabaseConnection = async () => {
     return true;
   } catch (err) {
     console.error('Supabase connection check exception:', err);
+    return false;
+  }
+};
+
+// Improved network availability check that works better in development
+export const isNetworkAvailable = async () => {
+  try {
+    // In development, we'll consider the network available if 
+    // we can connect to the Supabase API
+    const isConnected = await checkSupabaseConnection();
+    return isConnected;
+  } catch (e) {
+    console.error('Network check error:', e);
     return false;
   }
 };
@@ -80,23 +95,5 @@ export const getMockData = {
       data: [{ id: 1, name: 'Example Item', description: 'Created in offline mode' }],
       error: null
     };
-  }
-};
-
-// Function to check if network is available at all
-export const isNetworkAvailable = async () => {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch('https://www.google.com', { 
-      method: 'HEAD',
-      signal: controller.signal 
-    });
-    
-    clearTimeout(timeoutId);
-    return response.ok;
-  } catch (e) {
-    return false;
   }
 };
