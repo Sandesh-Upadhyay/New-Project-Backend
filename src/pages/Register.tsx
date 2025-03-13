@@ -7,35 +7,45 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, WifiOff } from "lucide-react";
 
 const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signUp, connectionStatus } = useAuth();
+  const { signUp, connectionStatus, networkAvailable } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     // Show connection status message if there are issues
-    if (connectionStatus === 'disconnected') {
+    if (connectionStatus === 'disconnected' && networkAvailable) {
       toast({
         title: 'Connection issue',
         description: 'Currently unable to connect to authentication services. Please try again later.',
         variant: 'destructive',
       });
     }
-  }, [connectionStatus, toast]);
+  }, [connectionStatus, networkAvailable, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check network first
+    if (!networkAvailable) {
+      toast({
+        title: 'No internet connection',
+        description: 'Please check your network connection and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     // Don't attempt if we know there's no connection
     if (connectionStatus === 'disconnected') {
       toast({
         title: 'Cannot register',
-        description: 'Unable to connect to authentication services. Please check your internet connection.',
+        description: 'Unable to connect to authentication services. Please try again later.',
         variant: 'destructive',
       });
       return;
@@ -109,12 +119,22 @@ const Register = () => {
             Create a new account to manage your items
           </CardDescription>
           
-          {connectionStatus === 'disconnected' && (
+          {!networkAvailable && (
+            <Alert variant="destructive" className="mt-4">
+              <WifiOff className="h-4 w-4" />
+              <AlertTitle>No Internet Connection</AlertTitle>
+              <AlertDescription>
+                You appear to be offline. Please check your network connection.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {connectionStatus === 'disconnected' && networkAvailable && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Connection Error</AlertTitle>
               <AlertDescription>
-                Unable to connect to authentication services. Please check your internet connection.
+                Unable to connect to authentication services. Please try again later.
               </AlertDescription>
             </Alert>
           )}
@@ -151,7 +171,7 @@ const Register = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || connectionStatus === 'disconnected'}
+              disabled={loading || connectionStatus === 'disconnected' || !networkAvailable}
             >
               {loading ? 'Creating account...' : 'Create Account'}
             </Button>

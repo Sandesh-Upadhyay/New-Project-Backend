@@ -1,13 +1,15 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, checkSupabaseConnection } from '@/lib/supabase';
+import { supabase, checkSupabaseConnection, isNetworkAvailable } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
   connectionStatus: 'unknown' | 'connected' | 'disconnected';
+  networkAvailable: boolean;
   signIn: (email: string, password: string) => Promise<{
     error: any | null;
     data: any | null;
@@ -26,15 +28,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
+  const [networkAvailable, setNetworkAvailable] = useState<boolean>(true);
+  const { toast } = useToast();
+
+  // Check network connectivity
+  const checkNetworkConnectivity = async () => {
+    const isAvailable = await isNetworkAvailable();
+    setNetworkAvailable(isAvailable);
+    
+    if (!isAvailable && connectionStatus !== 'disconnected') {
+      setConnectionStatus('disconnected');
+      toast({
+        title: 'Network unavailable',
+        description: 'You appear to be offline. Some features may not work correctly.',
+        variant: 'destructive',
+      });
+    }
+    
+    return isAvailable;
+  };
 
   useEffect(() => {
-    // Check Supabase connection on load
+    // Check network and Supabase connection on load
     const checkConnection = async () => {
-      const isConnected = await checkSupabaseConnection();
-      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      const hasNetwork = await checkNetworkConnectivity();
+      
+      if (hasNetwork) {
+        const isConnected = await checkSupabaseConnection();
+        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+        
+        if (!isConnected) {
+          toast({
+            title: 'Connection issue',
+            description: 'Unable to connect to authentication services. Please try again later.',
+            variant: 'destructive',
+          });
+        }
+      }
     };
     
     checkConnection();
+    
+    // Set up a periodic check for network connectivity
+    const connectivityCheckInterval = setInterval(() => {
+      checkNetworkConnectivity();
+    }, 30000); // Check every 30 seconds
     
     // Get initial session
     const getInitialSession = async () => {
@@ -65,14 +103,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(connectivityCheckInterval);
+    };
+  }, [toast]);
 
   const signUp = async (email: string, password: string) => {
     try {
+      // First check network connectivity
+      const isOnline = await checkNetworkConnectivity();
+      
+      if (!isOnline) {
+        return {
+          error: { message: 'No internet connection. Please check your network settings and try again.' },
+          data: null
+        };
+      }
+      
       if (connectionStatus === 'disconnected') {
         return {
-          error: { message: 'No connection to authentication service.' },
+          error: { message: 'No connection to authentication service. Please try again later.' },
           data: null
         };
       }
@@ -97,9 +148,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      // First check network connectivity
+      const isOnline = await checkNetworkConnectivity();
+      
+      if (!isOnline) {
+        return {
+          error: { message: 'No internet connection. Please check your network settings and try again.' },
+          data: null
+        };
+      }
+      
       if (connectionStatus === 'disconnected') {
         return {
-          error: { message: 'No connection to authentication service.' },
+          error: { message: 'No connection to authentication service. Please try again later.' },
           data: null
         };
       }
@@ -135,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     connectionStatus,
+    networkAvailable,
     signIn,
     signUp,
     signOut,
