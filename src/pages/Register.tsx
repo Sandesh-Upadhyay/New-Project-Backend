@@ -8,14 +8,40 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, WifiOff } from "lucide-react";
+import { supabase } from '@/integrations/supabase/client';
 
 const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [manualConnectionTest, setManualConnectionTest] = useState(false);
+  const [directSupabaseError, setDirectSupabaseError] = useState<string | null>(null);
   const { signUp, connectionStatus, networkAvailable } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Run a connection test when component mounts
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        // Test connection to Supabase directly
+        const { data, error } = await supabase.auth.getSession();
+        console.log("Direct Supabase connection test:", { data, error });
+        
+        if (error && error.message.includes('Failed to fetch')) {
+          setDirectSupabaseError("Cannot connect to Supabase servers. Please check your internet connection.");
+        } else {
+          setDirectSupabaseError(null);
+        }
+      } catch (err) {
+        console.error("Connection test error:", err);
+        setDirectSupabaseError("Error testing connection to authentication service.");
+      }
+      setManualConnectionTest(true);
+    };
+    
+    testConnection();
+  }, []);
 
   useEffect(() => {
     // Show connection status message if there are issues
@@ -65,40 +91,73 @@ const Register = () => {
     
     try {
       console.log('Attempting registration with:', email);
-      const { error, data } = await signUp(email, password);
       
-      if (error) {
-        console.error('Registration error:', error);
-        const errorMessage = error.message === 'Failed to fetch' 
-          ? 'Connection error. Please check your internet connection and try again.'
-          : error.message || 'Failed to create account. Please try again.';
+      // Try direct registration with Supabase if context method fails
+      try {
+        const { error, data } = await signUp(email, password);
+        
+        if (error) {
+          console.error('Registration error:', error);
           
-        toast({
-          title: 'Registration failed',
-          description: errorMessage,
-          variant: 'destructive',
+          // If we get a network error, try direct registration
+          if (error.message === 'Failed to fetch' || error.message.includes('network')) {
+            throw new Error('Network error, trying direct registration');
+          }
+          
+          const errorMessage = error.message || 'Failed to create account. Please try again.';
+          
+          toast({
+            title: 'Registration failed',
+            description: errorMessage,
+            variant: 'destructive',
+          });
+          return;
+        }
+        
+        if (data?.user) {
+          toast({
+            title: 'Registration successful',
+            description: 'Please check your email to confirm your account.',
+          });
+          navigate('/login');
+        } else {
+          toast({
+            title: 'Registration error',
+            description: 'Failed to create account. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      } catch (contextError) {
+        console.log("Context auth failed, trying direct Supabase API:", contextError);
+        
+        // Fall back to direct Supabase API call
+        const { data: directData, error: directError } = await supabase.auth.signUp({
+          email,
+          password,
         });
-        return;
-      }
-      
-      if (data?.user) {
-        toast({
-          title: 'Registration successful',
-          description: 'Please check your email to confirm your account.',
-        });
-        navigate('/login');
-      } else {
-        toast({
-          title: 'Registration error',
-          description: 'Failed to create account. Please try again.',
-          variant: 'destructive',
-        });
+        
+        if (directError) {
+          throw directError;
+        }
+        
+        if (directData?.user) {
+          toast({
+            title: 'Registration successful',
+            description: 'Please check your email to confirm your account.',
+          });
+          navigate('/login');
+        } else {
+          toast({
+            title: 'Registration status unclear',
+            description: 'Please check your email or try logging in.',
+          });
+        }
       }
     } catch (error: any) {
       console.error('Unexpected error during registration:', error);
-      const errorMessage = error.message?.includes('fetch')
+      const errorMessage = error.message?.includes('fetch') || error.message?.includes('network')
         ? 'Network error. Please check your connection and try again.'
-        : 'An unexpected error occurred. Please try again.';
+        : error.message || 'An unexpected error occurred. Please try again.';
         
       toast({
         title: 'Registration failed',
@@ -109,6 +168,8 @@ const Register = () => {
       setLoading(false);
     }
   };
+
+  const showConnectionIssue = !networkAvailable || connectionStatus === 'disconnected' || directSupabaseError;
 
   return (
     <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -136,6 +197,14 @@ const Register = () => {
               <AlertDescription>
                 Unable to connect to authentication services. Please try again later.
               </AlertDescription>
+            </Alert>
+          )}
+          
+          {directSupabaseError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Supabase Connection Error</AlertTitle>
+              <AlertDescription>{directSupabaseError}</AlertDescription>
             </Alert>
           )}
         </CardHeader>
@@ -171,7 +240,7 @@ const Register = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || connectionStatus === 'disconnected' || !networkAvailable}
+              disabled={loading || showConnectionIssue}
             >
               {loading ? 'Creating account...' : 'Create Account'}
             </Button>

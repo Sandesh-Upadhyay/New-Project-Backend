@@ -14,5 +14,24 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true
+  },
+  global: {
+    fetch: async (url: RequestInfo | URL, options?: RequestInit) => {
+      try {
+        console.log(`Fetching from integration client: ${typeof url === 'string' ? url : url.toString()}`);
+        // Use a lower timeout for better responsiveness when offline
+        const response = await fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(8000)
+        });
+        return response;
+      } catch (err) {
+        console.error('Integration client fetch error:', err);
+        throw err;
+      }
+    },
+    headers: {
+      'X-Client-Info': 'lovable-integration-client'
+    }
   }
 });
