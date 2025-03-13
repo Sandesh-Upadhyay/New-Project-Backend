@@ -169,7 +169,10 @@ const Register = () => {
     }
   };
 
-  const showConnectionIssue = !networkAvailable || connectionStatus === 'disconnected' || directSupabaseError;
+  // Fix: Convert directSupabaseError to boolean before combining with other boolean values
+  const showConnectionIssue = !networkAvailable || 
+                              connectionStatus === 'disconnected' || 
+                              (directSupabaseError !== null);
 
   return (
     <div className="flex h-screen items-center justify-center bg-gray-50">
